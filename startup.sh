@@ -1,0 +1,1 @@
+echo "gunicorn --bind=0.0.0.0 --timeout 600 app_flask:app" > startup.sh
