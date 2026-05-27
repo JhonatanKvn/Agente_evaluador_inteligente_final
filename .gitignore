@@ -1,7 +1,15 @@
+# Caché de Python
 __pycache__/
 *.pyc
-agente_tesis/__pycache__/
-agente_tesis/.env
-agente_tesis/logs/
+*.pyo
+*.pyd
+
+# Entornos y configuración local
+.env
+.venv/
+.vscode/
+
+# Logs y bases de datos
+logs/
 data/
 agent.db
