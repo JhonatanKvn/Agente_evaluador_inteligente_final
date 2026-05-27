@@ -1,7 +1,8 @@
-import csv
+﻿import csv
 import io
 import json
 import os
+import subprocess
 import threading
 import webbrowser
 import zipfile
@@ -10,11 +11,12 @@ from xml.etree import ElementTree
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
-from flask import Flask, redirect, render_template, request, url_for
-from PIL import UnidentifiedImageError
+from flask import Flask, Response, redirect, render_template, request, url_for
+from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
 from app.db.repository import (
     delete_student,
+    get_evaluation,
     get_student,
     init_db,
     list_evaluations,
@@ -31,7 +33,8 @@ from app.services.image_processing import prepare_image_for_ocr
 
 
 BASE_DIR = Path(__file__).resolve().parent
-ALLOWED_COURSES = ["Algoritmia y Programacion 1", "Algoritmia y Programacion 2"]
+ALLOWED_COURSES = ["Algoritmia y Programación 1", "Algoritmia y Programación 2"]
+EVIDENCE_DIR = BASE_DIR / "static" / "uploads"
 
 load_dotenv()
 init_db()
@@ -42,6 +45,7 @@ app = Flask(
     static_folder=str(BASE_DIR / "static"),
 )
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-secret")
+EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _to_result_dict(result: Any) -> Dict[str, Any]:
@@ -62,6 +66,197 @@ def _load_json_list(value: str) -> list:
         return loaded if isinstance(loaded, list) else []
     except json.JSONDecodeError:
         return []
+
+
+def _evaluation_for_view(evaluation: Dict[str, Any]) -> Dict[str, Any]:
+    evaluation["strengths"] = _load_json_list(evaluation.get("strengths_json", "[]"))
+    evaluation["improvements"] = _load_json_list(evaluation.get("improvements_json", "[]"))
+    evaluation["rubric_breakdown"] = _load_json_list(evaluation.get("rubric_breakdown_json", "[]"))
+    return evaluation
+
+
+def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int) -> list[str]:
+    wrapped: list[str] = []
+    for paragraph in str(text or "").splitlines():
+        words = paragraph.split()
+        if not words:
+            wrapped.append("")
+            continue
+        line = ""
+        for word in words:
+            candidate = f"{line} {word}".strip()
+            if draw.textbbox((0, 0), candidate, font=font)[2] <= max_width:
+                line = candidate
+            else:
+                wrapped.append(line)
+                line = word
+        if line:
+            wrapped.append(line)
+    return wrapped
+
+
+def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+    font_name = "arialbd.ttf" if bold else "arial.ttf"
+    font_path = Path(os.environ.get("WINDIR", "C:\\Windows")) / "Fonts" / font_name
+    if font_path.exists():
+        return ImageFont.truetype(str(font_path), size)
+    return ImageFont.load_default()
+
+
+def _generate_evaluation_pdf(evaluation: Dict[str, Any]) -> bytes:
+    width, height = 1240, 1754
+    margin = 80
+    pages: list[Image.Image] = []
+    page = Image.new("RGB", (width, height), "#fffaf2")
+    draw = ImageDraw.Draw(page)
+    title_font = _font(38, bold=True)
+    heading_font = _font(26, bold=True)
+    body_font = _font(22)
+    small_font = _font(18)
+    y = 70
+
+    def new_page() -> None:
+        nonlocal page, draw, y
+        pages.append(page)
+        page = Image.new("RGB", (width, height), "#fffaf2")
+        draw = ImageDraw.Draw(page)
+        y = 70
+
+    def write(text: str, font: ImageFont.ImageFont = body_font, fill: str = "#1f2937", gap: int = 10) -> None:
+        nonlocal y
+        for line in _wrap_text(draw, text, font, width - margin * 2):
+            if y > height - 120:
+                new_page()
+            draw.text((margin, y), line, font=font, fill=fill)
+            y += int(font.size * 1.45) if hasattr(font, "size") else 28
+        y += gap
+
+    write("Informe de evaluación", title_font, "#8a2f07", 18)
+    write(f"Estudiante: {evaluation['student_name']} ({evaluation['student_code']})", body_font)
+    write(f"Curso: {evaluation['course_name']}", body_font)
+    write(f"Actividad: {evaluation['activity_name']} - {evaluation['activity_type']}", body_font)
+    write(f"Semestre: {evaluation['semester']} | Fecha: {evaluation['created_at']}", small_font)
+    write(f"Nota: {evaluation['score']} / {evaluation['max_score']}", heading_font, "#9e4b2a", 22)
+
+    write("Retroalimentación", heading_font, "#4b3428", 10)
+    write(evaluation.get("feedback", ""), body_font)
+
+    write("Rúbrica punto por punto", heading_font, "#4b3428", 10)
+    for row in evaluation.get("rubric_breakdown", []):
+        write(
+            f"- {row.get('criterion', '')}: {row.get('score', '')}/{row.get('max', '')}. {row.get('comment', '')}",
+            body_font,
+            gap=4,
+        )
+
+    image_name = evaluation.get("image_filename", "")
+    image_path = EVIDENCE_DIR / image_name if image_name else None
+    if image_path and image_path.exists():
+        if y > height - 700:
+            new_page()
+        write("Imagen evaluada", heading_font, "#4b3428", 12)
+        with Image.open(image_path) as img:
+            img = img.convert("RGB")
+            img.thumbnail((width - margin * 2, 760), Image.Resampling.LANCZOS)
+            page.paste(img, (margin, y))
+            y += img.height + 20
+        write(f"Archivo: {image_name}", small_font, "#52606d")
+
+    pages.append(page)
+    out = io.BytesIO()
+    first, rest = pages[0], pages[1:]
+    first.save(out, format="PDF", save_all=True, append_images=rest)
+    return out.getvalue()
+
+
+def _generate_student_report_pdf(student: Dict[str, Any], evaluations: list[Dict[str, Any]]) -> bytes:
+    width, height = 1240, 1754
+    margin = 80
+    pages: list[Image.Image] = []
+    page = Image.new("RGB", (width, height), "#fffaf2")
+    draw = ImageDraw.Draw(page)
+    title_font = _font(38, bold=True)
+    heading_font = _font(26, bold=True)
+    body_font = _font(22)
+    small_font = _font(18)
+    y = 70
+
+    def new_page() -> None:
+        nonlocal page, draw, y
+        pages.append(page)
+        page = Image.new("RGB", (width, height), "#fffaf2")
+        draw = ImageDraw.Draw(page)
+        y = 70
+
+    def write(text: str, font: ImageFont.ImageFont = body_font, fill: str = "#1f2937", gap: int = 10) -> None:
+        nonlocal y
+        for line in _wrap_text(draw, text, font, width - margin * 2):
+            if y > height - 120:
+                new_page()
+            draw.text((margin, y), line, font=font, fill=fill)
+            y += int(font.size * 1.45) if hasattr(font, "size") else 28
+        y += gap
+
+    write("Informe general del estudiante", title_font, "#8a2f07", 18)
+    write(f"Estudiante: {student['student_name']} ({student['student_code']})", body_font)
+    write(f"Curso: {student['course_name']}", body_font)
+    if student.get("course_description"):
+        write(f"Descripción del curso: {student['course_description']}", small_font)
+
+    if not evaluations:
+        write("Este estudiante aún no tiene evaluaciónes registradas.", body_font)
+    else:
+        scores = [float(item["score"]) for item in evaluations]
+        max_scores = [float(item["max_score"]) for item in evaluations]
+        avg_score = round(sum(scores) / len(scores), 2)
+        avg_max = round(sum(max_scores) / len(max_scores), 2)
+        best_score = round(max(scores), 2)
+        first_score = round(scores[0], 2)
+        last_score = round(scores[-1], 2)
+        delta = round(last_score - first_score, 2)
+
+        write("Resumen de rendimiento", heading_font, "#4b3428", 10)
+        write(f"- Evaluaciónes registradas: {len(evaluations)}", body_font, gap=4)
+        write(f"- Promedio: {avg_score} / {avg_max}", body_font, gap=4)
+        write(f"- Mejor nota: {best_score}", body_font, gap=4)
+        write(f"- Variación entre primera y última evaluación: {delta}", body_font, gap=16)
+
+        write("Historial de actividades", heading_font, "#4b3428", 10)
+        for index, item in enumerate(evaluations, start=1):
+            write(
+                f"{index}. {item['activity_name']} ({item['activity_type']}) - "
+                f"{item['score']} / {item['max_score']} - {item['created_at']}",
+                body_font,
+                gap=4,
+            )
+
+        write("Retroalimentación por evaluación", heading_font, "#4b3428", 10)
+        for index, raw_item in enumerate(evaluations, start=1):
+            item = _evaluation_for_view(dict(raw_item))
+            write(
+                f"Evaluación {index}: {item['activity_name']} - Nota {item['score']} / {item['max_score']}",
+                heading_font,
+                "#9e4b2a",
+                8,
+            )
+            write(item.get("feedback", ""), body_font, gap=12)
+            image_name = item.get("image_filename", "")
+            image_path = EVIDENCE_DIR / image_name if image_name else None
+            if image_path and image_path.exists():
+                if y > height - 520:
+                    new_page()
+                write("Imagen asociada", small_font, "#4b3428", 6)
+                with Image.open(image_path) as img:
+                    img = img.convert("RGB")
+                    img.thumbnail((width - margin * 2, 460), Image.Resampling.LANCZOS)
+                    page.paste(img, (margin, y))
+                    y += img.height + 18
+
+    pages.append(page)
+    out = io.BytesIO()
+    first, rest = pages[0], pages[1:]
+    first.save(out, format="PDF", save_all=True, append_images=rest)
+    return out.getvalue()
 
 
 def _normalize_header(value: str) -> str:
@@ -219,9 +414,9 @@ def evaluate_page():
         semester="2026-1",
         max_score=5.0,
         rubric_text=(
-            "Criterio: Logica del algoritmo (40%)\n"
+            "Criterio: Lógica del algoritmo (40%)\n"
             "Criterio: Sintaxis y estructura en Python (30%)\n"
-            "Criterio: Buenas practicas y legibilidad (30%)\n"
+            "Criterio: Buenas prácticas y legibilidad (30%)\n"
         ),
     )
 
@@ -246,6 +441,30 @@ def history_page():
     )
 
 
+@app.get("/history/evaluation/<int:evaluation_id>")
+def evaluation_detail_page(evaluation_id: int):
+    evaluation = get_evaluation(evaluation_id)
+    if not evaluation:
+        return redirect(url_for("history_page", filter_name="", course_filter=""))
+    evaluation = _evaluation_for_view(evaluation)
+    return render_template("evaluation_detail.html", evaluation=evaluation)
+
+
+@app.get("/history/evaluation/<int:evaluation_id>/pdf")
+def evaluation_pdf(evaluation_id: int):
+    evaluation = get_evaluation(evaluation_id)
+    if not evaluation:
+        return redirect(url_for("history_page"))
+    evaluation = _evaluation_for_view(evaluation)
+    pdf_bytes = _generate_evaluation_pdf(evaluation)
+    filename = f"informe_{evaluation['student_code']}_{evaluation['id']}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 @app.get("/report")
 def report_page():
     selected_student_id = request.args.get("student_id", "").strip()
@@ -264,20 +483,18 @@ def report_page():
         if evaluations:
             first = evaluations[0]
             latest = evaluations[-1]
-            latest["strengths"] = _load_json_list(latest.get("strengths_json", "[]"))
-            latest["improvements"] = _load_json_list(latest.get("improvements_json", "[]"))
-            latest["rubric_breakdown"] = _load_json_list(latest.get("rubric_breakdown_json", "[]"))
+            latest = _evaluation_for_view(latest)
             if len(evaluations) == 1:
                 comparison = {
                     "status": "first",
-                    "text": "Primera evaluacion registrada. Aun no hay comparativas de rendimiento.",
+                    "text": "Primera evaluación registrada. Aún no hay comparativas de rendimiento.",
                 }
             else:
                 delta = round(float(latest["score"]) - float(first["score"]), 2)
                 comparison = {
                     "status": "comparison",
                     "delta": delta,
-                    "text": f"Comparacion entre Evaluacion 1 y la evaluacion mas reciente: variacion de {delta:.2f} puntos.",
+                    "text": f"Comparación entre Evaluación 1 y la evaluación mas reciente: variación de {delta:.2f} puntos.",
                 }
 
     return render_template(
@@ -297,6 +514,21 @@ def report_page():
     )
 
 
+@app.get("/report/student/<int:student_id>/pdf")
+def student_report_pdf(student_id: int):
+    student = get_student(student_id)
+    if not student:
+        return redirect(url_for("report_page"))
+    evaluations = list_student_evaluations(student["student_code"], student["course_name"], limit=200)
+    pdf_bytes = _generate_student_report_pdf(student, evaluations)
+    filename = f"informe_estudiante_{student['student_code']}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 @app.post("/students")
 def create_student():
     student_name = request.form.get("student_name", "").strip()
@@ -305,9 +537,9 @@ def create_student():
     course_description = request.form.get("course_description", "").strip()
 
     if not student_name or not student_code or not course_name:
-        return redirect(url_for("students_page", message="Completa nombre, codigo y curso del estudiante."))
+        return redirect(url_for("students_page", message="Completa nombre, código y curso del estudiante."))
     if course_name not in ALLOWED_COURSES:
-        return redirect(url_for("students_page", message="Curso no permitido. Usa Algoritmia y Programacion 1 o 2."))
+        return redirect(url_for("students_page", message="Curso no permitido. Usa Algoritmia y Programación 1 o 2."))
 
     save_student(
         {
@@ -348,7 +580,7 @@ def import_students():
             url_for(
                 "students_page",
                 course_filter=course_name,
-                message="No se encontraron nombres y codigos en el archivo.",
+                message="No se encontraron nombres y códigos en el archivo.",
             )
         )
     imported = 0
@@ -374,7 +606,7 @@ def remove_student(student_id: int):
     if not deleted:
         message = "No se encontro el estudiante para borrar."
     else:
-        message = f"Estudiante {deleted['student_name']} eliminado del listado. Sus evaluaciones historicas se conservan."
+        message = f"Estudiante {deleted['student_name']} eliminado del listado. Sus evaluaciónes históricas se conservan."
         course_filter = course_filter or deleted["course_name"]
     return redirect(
         url_for(
@@ -414,29 +646,33 @@ def evaluate():
             error = "El estudiante seleccionado no existe."
 
     if not error and not activity_name:
-        error = "Debes escribir el nombre de la evaluacion."
+        error = "Debes escribir el nombre de la evaluación."
     elif not error and not activity_type:
         error = "Debes escribir el tipo de actividad."
     elif not activity_name:
-        error = "Debes escribir el nombre de la evaluacion."
+        error = "Debes escribir el nombre de la evaluación."
     elif not activity_type:
         error = "Debes escribir el tipo de actividad."
     elif not semester:
         error = "Debes escribir el semestre (ej: 2026-1)."
     elif not rubric_text:
-        error = "Debes escribir las rubricas de evaluacion."
+        error = "Debes escribir las rúbricas de evaluación."
     elif not uploaded or not uploaded.filename:
-        error = "Debes subir una imagen del codigo."
+        error = "Debes subir una imagen del código."
 
     if not error:
         try:
             api_key = os.getenv("OCRSPACE_API_KEY", "helloworld").strip()
             processed_bytes, processed_name = prepare_image_for_ocr(uploaded.read(), uploaded.filename)
+            safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in processed_name)
+            evidence_name = f"{selected_student['student_code']}_{activity_name}_{safe_name}"
+            evidence_name = "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in evidence_name)
+            (EVIDENCE_DIR / evidence_name).write_bytes(processed_bytes)
             raw_result = evaluate_with_ocr_space(
                 api_key=api_key,
                 rubric_text=rubric_text,
                 image_bytes=processed_bytes,
-                filename=processed_name,
+                filename=evidence_name,
                 max_score=max_score,
             )
             result = _to_result_dict(raw_result)
@@ -458,18 +694,20 @@ def evaluate():
                     "improvements_json": json.dumps(result["improvements"], ensure_ascii=False),
                     "rubric_breakdown_json": json.dumps(result["rubric_breakdown"], ensure_ascii=False),
                     "rubric_text": rubric_text,
-                    "image_filename": processed_name,
+                    "image_filename": evidence_name,
                 }
             )
             return redirect(
                 url_for(
                     "report_page",
                     student_id=selected_student_id,
-                    message=f"Evaluacion guardada con ID {eval_id}.",
+                    message=f"Evaluación guardada con ID {eval_id}.",
                 )
             )
         except UnidentifiedImageError:
-            error = "El archivo no es una imagen valida. Sube JPG, JPEG, PNG o WEBP."
+            error = "El archivo no es una imagen válida. Sube JPG, JPEG, PNG o WEBP."
+        except ValueError as exc:
+            error = str(exc)
         except Exception as exc:
             error = f"No se pudo evaluar la entrega: {exc}"
 
@@ -499,5 +737,24 @@ def run() -> None:
     port = int(os.getenv("APP_PORT", "5000"))
     auto_open = os.getenv("AUTO_OPEN_BROWSER", "1").strip() == "1"
     if auto_open:
-        threading.Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
+        url = f"http://127.0.0.1:{port}/students"
+
+        def open_app() -> None:
+            commands = [
+                ["cmd", "/c", "start", "", "chrome", url],
+                ["cmd", "/c", "start", "", url],
+            ]
+            for command in commands:
+                try:
+                    subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return
+                except Exception:
+                    continue
+            try:
+                os.startfile(url)  # type: ignore[attr-defined]
+            except Exception:
+                webbrowser.open(url)
+
+        threading.Timer(1.2, open_app).start()
     app.run(host="127.0.0.1", port=port, debug=debug_mode, use_reloader=False)
+

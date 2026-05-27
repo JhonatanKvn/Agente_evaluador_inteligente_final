@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
   <head>
     <meta charset="utf-8" />
@@ -9,13 +9,13 @@
   <body>
     <main class="container">
       <header class="hero">
-        <p class="tag">Gestion academica</p>
+        <p class="tag">Gestión academica</p>
         <h1>Estudiantes y cursos</h1>
-        <p class="subtitle">Carga estudiantes con codigo, curso y descripcion.</p>
+        <p class="subtitle">Carga estudiantes con código, curso y descripción.</p>
       </header>
       <nav class="tabs">
         <a href="{{ url_for('students_page') }}">Estudiantes</a>
-        <a href="{{ url_for('evaluate_page') }}">Evaluacion</a>
+        <a href="{{ url_for('evaluate_page') }}">Evaluación</a>
         <a href="{{ url_for('report_page') }}">Informe</a>
         <a href="{{ url_for('history_page') }}">Historial</a>
       </nav>
@@ -27,7 +27,7 @@
         <form action="{{ url_for('create_student') }}" method="post" class="form">
           <div class="grid two">
             <label>Nombre del estudiante <input type="text" name="student_name" required /></label>
-            <label>Codigo <input type="text" name="student_code" required /></label>
+            <label>Código <input type="text" name="student_code" required /></label>
           </div>
           <div class="grid two">
             <label>
@@ -39,7 +39,7 @@
                 {% endfor %}
               </select>
             </label>
-            <label>Descripcion del curso <input type="text" name="course_description" /></label>
+            <label>Descripción del curso <input type="text" name="course_description" /></label>
           </div>
           <button type="submit" class="btn primary">Guardar estudiante</button>
         </form>
@@ -47,8 +47,8 @@
 
       <section class="panel">
         <h2>Cargar estudiantes por archivo</h2>
-        <p class="muted">Formatos aceptados: TXT, CSV, TSV y XLSX. El sistema solo lee columnas de codigo y nombre; las demas columnas se ignoran.</p>
-        <p class="muted">Ejemplo sin encabezados: <strong>1001,Juan Perez</strong>. Ejemplo con encabezados: <strong>codigo,nombre,correo</strong>.</p>
+        <p class="muted">Formatos aceptados: TXT, CSV, TSV y XLSX. El sistema solo lee columnas de código y nombre; las demás columnas se ignoran.</p>
+        <p class="muted">Ejemplo sin encabezados: <strong>1001,Juan Perez</strong>. Ejemplo con encabezados: <strong>código,nombre,correo</strong>.</p>
         <form action="{{ url_for('import_students') }}" method="post" enctype="multipart/form-data" class="form">
           <div class="grid two">
             <label>
@@ -60,7 +60,7 @@
                 {% endfor %}
               </select>
             </label>
-            <label>Descripcion del curso <input type="text" name="course_description" /></label>
+            <label>Descripción del curso <input type="text" name="course_description" /></label>
           </div>
           <label>Archivo de estudiantes <input type="file" name="students_file" accept=".txt,.csv,.tsv,.xlsx" required /></label>
           <button type="submit" class="btn primary">Importar listado</button>
@@ -77,13 +77,13 @@
               <option value="{{ course }}" {% if course_filter == course %}selected{% endif %}>{{ course }}</option>
               {% endfor %}
             </select>
-            <input type="search" name="student_filter" value="{{ student_filter }}" placeholder="Buscar por nombre o codigo" />
+            <input type="search" name="student_filter" value="{{ student_filter }}" placeholder="Buscar por nombre o código" />
             <button type="submit" class="btn ghost">Filtrar</button>
           </form>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Estudiante</th><th>Codigo</th><th>Curso</th><th>Descripcion</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Estudiante</th><th>Código</th><th>Curso</th><th>Descripción</th><th>Acciones</th></tr></thead>
             <tbody>
               {% for student in students %}
               <tr>
@@ -96,7 +96,7 @@
                     action="{{ url_for('remove_student', student_id=student['id']) }}"
                     method="post"
                     class="inline-form"
-                    onsubmit="return confirm('Seguro que deseas borrar a {{ student["student_name"] }} del listado? Las evaluaciones historicas se conservaran.');"
+                    onsubmit="return confirm('Seguro que deseas borrar a {{ student["student_name"] }} del listado? Las evaluaciónes históricas se conservaran.');"
                   >
                     <input type="hidden" name="course_filter" value="{{ course_filter }}" />
                     <input type="hidden" name="student_filter" value="{{ student_filter }}" />
@@ -112,3 +112,4 @@
     </main>
   </body>
 </html>
+

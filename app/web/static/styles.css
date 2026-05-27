@@ -248,12 +248,74 @@ tr:hover td {
   margin: 0;
 }
 
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 pre {
   background: #0b1225;
   color: #f8fafc;
   border-radius: 10px;
   padding: 12px;
   white-space: pre-wrap;
+}
+
+.feedback-report {
+  white-space: pre-line;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fffaf2;
+  padding: 16px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.image-preview-card {
+  display: grid;
+  gap: 12px;
+  border: 1px dashed var(--primary);
+  border-radius: 18px;
+  background: #fffaf2;
+  padding: 14px;
+}
+
+.preview-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preview-copy span {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.image-preview-card img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.graded-image-card {
+  display: grid;
+  gap: 10px;
+}
+
+.graded-image-card img {
+  display: block;
+  width: 100%;
+  max-height: 620px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
 }
 
 .stats-row {

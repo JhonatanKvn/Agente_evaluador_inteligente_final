@@ -26,9 +26,7 @@ Abrir: http://127.0.0.1:5000
 OCRSPACE_API_KEY=helloworld
 ```
 
-## Nota
-
-OCR.Space gratis tiene limite de 1 MB por imagen en el plan base.
+version final
 
 ## Estructura
 

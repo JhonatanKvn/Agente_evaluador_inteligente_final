@@ -1,4 +1,4 @@
-import os
+﻿import os
 from io import BytesIO
 from typing import Tuple
 
@@ -8,7 +8,7 @@ from PIL import Image
 def prepare_image_for_ocr(raw_bytes: bytes, original_filename: str) -> Tuple[bytes, str]:
     """
     Deja la imagen lista para OCR.Space:
-    - lado mayor maximo de 1000px
+    - lado mayor máximo de 1000px
     - escala de grises
     - JPG calidad 70
     - intenta quedar por debajo de 1MB
@@ -32,4 +32,5 @@ def prepare_image_for_ocr(raw_bytes: bytes, original_filename: str) -> Tuple[byt
 
     base = os.path.splitext(original_filename or "imagen")[0]
     return data, f"{base}_ocr.jpg"
+
 

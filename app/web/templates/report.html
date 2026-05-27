@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
   <head>
     <meta charset="utf-8" />
@@ -9,13 +9,13 @@
   <body>
     <main class="container">
       <header class="hero">
-        <p class="tag">Informe academico</p>
-        <h1>Informe de evaluacion</h1>
-        <p class="subtitle">Retroalimentacion punto por punto y resumen de rendimiento.</p>
+        <p class="tag">Informe académico</p>
+        <h1>Informe de evaluación</h1>
+        <p class="subtitle">Retroalimentación punto por punto y resumen de rendimiento.</p>
       </header>
       <nav class="tabs">
         <a href="{{ url_for('students_page') }}">Estudiantes</a>
-        <a href="{{ url_for('evaluate_page') }}">Evaluacion</a>
+        <a href="{{ url_for('evaluate_page') }}">Evaluación</a>
         <a href="{{ url_for('report_page') }}">Informe</a>
         <a href="{{ url_for('history_page') }}">Historial</a>
       </nav>
@@ -33,7 +33,7 @@
             <option value="{{ course }}" {% if course_filter == course %}selected{% endif %}>{{ course }}</option>
             {% endfor %}
           </select>
-          <input type="search" name="student_filter" value="{{ student_filter }}" placeholder="Buscar por nombre o codigo" />
+          <input type="search" name="student_filter" value="{{ student_filter }}" placeholder="Buscar por nombre o código" />
           <button type="submit" class="btn ghost">Filtrar</button>
         </form>
         <form action="{{ url_for('report_page') }}" method="get" class="history-filter">
@@ -56,22 +56,23 @@
         <div>
           <p class="tag">Estudiante seleccionado</p>
           <h2>{{ student["student_name"] }}</h2>
-          <p><strong>Codigo:</strong> {{ student["student_code"] }} | <strong>Curso:</strong> {{ student["course_name"] }}</p>
+          <p><strong>Código:</strong> {{ student["student_code"] }} | <strong>Curso:</strong> {{ student["course_name"] }}</p>
           <p>{{ student["course_description"] }}</p>
           <p>{{ comparison.text }}</p>
+          <a class="btn primary" href="{{ url_for('student_report_pdf', student_id=student['id']) }}">Descargar informe PDF del estudiante</a>
         </div>
         <div class="score-card">
-          <span>Ultima nota</span>
+          <span>Última nota</span>
           <strong>{{ "%.2f"|format(latest.score) }}</strong>
           <small>de {{ "%.2f"|format(latest.max_score) }}</small>
         </div>
       </section>
 
       <section class="panel">
-        <h2>Retroalimentacion punto por punto</h2>
+        <h2>Retroalimentación punto por punto</h2>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Criterio</th><th>Puntaje</th><th>Maximo</th><th>Comentario</th></tr></thead>
+            <thead><tr><th>Criterio</th><th>Puntaje</th><th>Máximo</th><th>Comentario</th></tr></thead>
             <tbody>
               {% for row in latest.rubric_breakdown %}
               <tr><td>{{ row.get("criterion", "") }}</td><td>{{ row.get("score", "") }}</td><td>{{ row.get("max", "") }}</td><td>{{ row.get("comment", "") }}</td></tr>
@@ -79,8 +80,20 @@
             </tbody>
           </table>
         </div>
-        <h3>Retroalimentacion general</h3>
-        <p>{{ latest.feedback }}</p>
+        <h3>Retroalimentación general</h3>
+        <div class="feedback-report">{{ latest.feedback }}</div>
+      </section>
+
+      <section class="panel">
+        <h2>Imagen evaluada</h2>
+        {% if latest.image_filename %}
+        <div class="graded-image-card">
+          <img src="{{ url_for('static', filename='uploads/' ~ latest.image_filename) }}" alt="Imagen de la actividad evaluada" />
+          <p class="muted">Archivo asociado: {{ latest.image_filename }}</p>
+        </div>
+        {% else %}
+        <p class="muted">Esta evaluación no tiene imagen guardada porque fue creada antes de activar esta opción.</p>
+        {% endif %}
       </section>
 
       <section class="panel">
@@ -97,13 +110,13 @@
         </div>
       </section>
       {% elif student %}
-      <section class="panel"><p>Este estudiante aun no tiene evaluaciones cargadas.</p></section>
+      <section class="panel"><p>Este estudiante aún no tiene evaluaciónes cargadas.</p></section>
       {% else %}
       <section class="panel">
-        <h2>Evaluaciones recientes</h2>
+        <h2>Evaluaciónes recientes</h2>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Curso</th><th>Estudiante</th><th>Evaluacion</th><th>Tipo</th><th>Nota</th><th>Fecha</th></tr></thead>
+            <thead><tr><th>Curso</th><th>Estudiante</th><th>Evaluación</th><th>Tipo</th><th>Nota</th><th>Fecha</th></tr></thead>
             <tbody>
               {% for row in latest_evaluations %}
               <tr><td>{{ row["course_name"] }}</td><td>{{ row["student_name"] }}</td><td>{{ row["activity_name"] }}</td><td>{{ row["activity_type"] }}</td><td>{{ row["score"] }} / {{ row["max_score"] }}</td><td>{{ row["created_at"] }}</td></tr>
@@ -116,3 +129,4 @@
     </main>
   </body>
 </html>
+

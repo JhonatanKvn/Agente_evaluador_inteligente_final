@@ -1,0 +1,74 @@
+﻿<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Detalle de evaluación</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="hero">
+        <p class="tag">Historial académico</p>
+        <h1>Detalle de evaluación</h1>
+        <p class="subtitle">Consulta nuevamente la retroalimentación, nota e imagen evaluada.</p>
+      </header>
+      <nav class="tabs">
+        <a href="{{ url_for('students_page') }}">Estudiantes</a>
+        <a href="{{ url_for('evaluate_page') }}">Evaluación</a>
+        <a href="{{ url_for('report_page') }}">Informe</a>
+        <a href="{{ url_for('history_page') }}">Historial</a>
+      </nav>
+
+      <section class="panel report-summary">
+        <div>
+          <p class="tag">Evaluación #{{ evaluation["id"] }}</p>
+          <h2>{{ evaluation["student_name"] }}</h2>
+          <p><strong>Código:</strong> {{ evaluation["student_code"] }} | <strong>Curso:</strong> {{ evaluation["course_name"] }}</p>
+          <p><strong>Actividad:</strong> {{ evaluation["activity_name"] }} | <strong>Tipo:</strong> {{ evaluation["activity_type"] }}</p>
+          <p><strong>Semestre:</strong> {{ evaluation["semester"] }} | <strong>Fecha:</strong> {{ evaluation["created_at"] }}</p>
+          <a class="btn primary" href="{{ url_for('evaluation_pdf', evaluation_id=evaluation['id']) }}">Descargar informe PDF</a>
+        </div>
+        <div class="score-card">
+          <span>Nota</span>
+          <strong>{{ "%.2f"|format(evaluation.score) }}</strong>
+          <small>de {{ "%.2f"|format(evaluation.max_score) }}</small>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Retroalimentación punto por punto</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Criterio</th><th>Puntaje</th><th>Máximo</th><th>Comentario</th></tr></thead>
+            <tbody>
+              {% for row in evaluation.rubric_breakdown %}
+              <tr><td>{{ row.get("criterion", "") }}</td><td>{{ row.get("score", "") }}</td><td>{{ row.get("max", "") }}</td><td>{{ row.get("comment", "") }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <h3>Retroalimentación general</h3>
+        <div class="feedback-report">{{ evaluation.feedback }}</div>
+      </section>
+
+      <section class="panel">
+        <h2>Imagen evaluada</h2>
+        {% if evaluation.image_filename %}
+        <div class="graded-image-card">
+          <img src="{{ url_for('static', filename='uploads/' ~ evaluation.image_filename) }}" alt="Imagen historica evaluada" />
+          <p class="muted">Archivo asociado: {{ evaluation.image_filename }}</p>
+        </div>
+        {% else %}
+        <p class="muted">Esta evaluación no tiene imagen guardada porque fue creada antes de activar esta opción.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h2>Texto transcrito por OCR</h2>
+        <pre>{{ evaluation.code_transcription }}</pre>
+      </section>
+    </main>
+  </body>
+</html>
+

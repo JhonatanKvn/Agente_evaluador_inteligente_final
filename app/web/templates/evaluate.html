@@ -1,21 +1,21 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cargar evaluacion</title>
+    <title>Cargar evaluación</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
     <main class="container">
       <header class="hero">
         <p class="tag">Carga individual</p>
-        <h1>Cargar evaluacion</h1>
+        <h1>Cargar evaluación</h1>
         <p class="subtitle">Selecciona un estudiante y carga una actividad a la vez.</p>
       </header>
       <nav class="tabs">
         <a href="{{ url_for('students_page') }}">Estudiantes</a>
-        <a href="{{ url_for('evaluate_page') }}">Evaluacion</a>
+        <a href="{{ url_for('evaluate_page') }}">Evaluación</a>
         <a href="{{ url_for('report_page') }}">Informe</a>
         <a href="{{ url_for('history_page') }}">Historial</a>
       </nav>
@@ -33,7 +33,7 @@
             <option value="{{ course }}" {% if course_filter == course %}selected{% endif %}>{{ course }}</option>
             {% endfor %}
           </select>
-          <input type="search" name="student_filter" value="{{ student_filter }}" placeholder="Nombre o codigo del estudiante" />
+          <input type="search" name="student_filter" value="{{ student_filter }}" placeholder="Nombre o código del estudiante" />
           <button type="submit" class="btn ghost">Buscar</button>
         </form>
       </section>
@@ -53,7 +53,7 @@
             </select>
           </label>
           <div class="grid two">
-            <label>Nombre de la evaluacion <input type="text" name="activity_name" value="{{ activity_name }}" required /></label>
+            <label>Nombre de la evaluación <input type="text" name="activity_name" value="{{ activity_name }}" required /></label>
             <label>
               Tipo de actividad
               <select name="activity_type" required>
@@ -67,11 +67,41 @@
             <label>Semestre <input type="text" name="semester" value="{{ semester }}" required /></label>
             <label>Nota maxima <input type="number" name="max_score" step="0.5" min="1" max="100" value="{{ max_score }}" /></label>
           </div>
-          <label>Rubrica de la actividad <textarea name="rubric_text" rows="7" required>{{ rubric_text }}</textarea></label>
-          <label>Imagen de la evaluacion <input type="file" name="code_image" accept=".jpg,.jpeg,.png,.webp" required /></label>
+          <label>Rúbrica de la actividad <textarea name="rubric_text" rows="7" required>{{ rubric_text }}</textarea></label>
+          <label>Imagen de la evaluación <input id="code-image-input" type="file" name="code_image" accept=".jpg,.jpeg,.png,.webp" required /></label>
+          <div id="image-preview-card" class="image-preview-card" hidden>
+            <div class="preview-copy">
+              <strong>Vista previa de la imagen</strong>
+              <span id="image-preview-info">Archivo seleccionado</span>
+            </div>
+            <img id="image-preview" alt="Vista previa de la evaluación cargada" />
+          </div>
           <button type="submit" class="btn primary">Evaluar actividad</button>
         </form>
       </section>
     </main>
+    <script>
+      const imageInput = document.getElementById("code-image-input");
+      const previewCard = document.getElementById("image-preview-card");
+      const previewImage = document.getElementById("image-preview");
+      const previewInfo = document.getElementById("image-preview-info");
+
+      imageInput.addEventListener("change", () => {
+        const file = imageInput.files && imageInput.files[0];
+        if (!file) {
+          previewCard.hidden = true;
+          previewImage.removeAttribute("src");
+          previewInfo.textContent = "Archivo seleccionado";
+          return;
+        }
+
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+        previewInfo.textContent = `${file.name} - ${sizeMb} MB`;
+        previewImage.src = URL.createObjectURL(file);
+        previewImage.onload = () => URL.revokeObjectURL(previewImage.src);
+        previewCard.hidden = false;
+      });
+    </script>
   </body>
 </html>
+

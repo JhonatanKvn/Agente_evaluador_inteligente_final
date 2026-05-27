@@ -184,7 +184,7 @@ def list_evaluations(
         rows = conn.execute(
             f"""
             SELECT id, student_name, student_code, course_name, activity_name, activity_type,
-                   semester, mode, score, max_score, created_at
+                   semester, mode, score, max_score, image_filename, created_at
             FROM evaluations
             {where}
             ORDER BY id DESC
@@ -353,6 +353,22 @@ def delete_student(student_id: int) -> Optional[Dict[str, Any]]:
     return student
 
 
+def get_evaluation(evaluation_id: int) -> Optional[Dict[str, Any]]:
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT id, student_name, student_code, course_name, course_description,
+                   activity_name, activity_type, semester, mode, score, max_score,
+                   feedback, code_transcription, strengths_json, improvements_json,
+                   rubric_breakdown_json, rubric_text, image_filename, created_at
+            FROM evaluations
+            WHERE id = ?
+            """,
+            (evaluation_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def list_courses() -> List[Dict[str, Any]]:
     with get_conn() as conn:
         rows = conn.execute(
@@ -373,7 +389,7 @@ def list_student_evaluations(student_code: str, course_name: str, limit: int = 2
             SELECT id, student_name, student_code, course_name, course_description,
                    activity_name, activity_type, semester, score, max_score,
                    feedback, code_transcription, strengths_json, improvements_json,
-                   rubric_breakdown_json, rubric_text, created_at
+                   rubric_breakdown_json, rubric_text, image_filename, created_at
             FROM evaluations
             WHERE student_code = ? AND course_name = ?
             ORDER BY id ASC
@@ -389,7 +405,7 @@ def list_latest_evaluations(limit: int = 20) -> List[Dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT id, student_name, student_code, course_name, activity_name,
-                   activity_type, semester, score, max_score, created_at
+                   activity_type, semester, score, max_score, image_filename, created_at
             FROM evaluations
             ORDER BY id DESC
             LIMIT ?
